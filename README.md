@@ -38,7 +38,7 @@ response, though it still calibrates to a known crisis, not the next one.
 ## Setup
 
 ```bash
-git clone git@github.com:tianxinghu/var-dashboard.git
+git clone git@github.com:t-x-hu/var-dashboard.git
 cd var-dashboard
 conda create -n var-dashboard python=3.12
 conda activate var-dashboard
