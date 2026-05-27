@@ -58,6 +58,9 @@ if __name__ == "__main__":
     mc_var_5d = mc_var(port, horizon=5)
     mc_es_5d = mc_es(port, horizon=5)
     print(f"  5-day  VaR  {mc_var_5d:>6.2%}   ES  {mc_es_5d:>6.2%}")
+    mc_var_10d = mc_var(port, horizon=10)
+    mc_es_10d = mc_es(port, horizon=10)
+    print(f"  10-day VaR  {mc_var_10d:>6.2%}   ES  {mc_es_10d:>6.2%}")
 
     # how much tail does the normal MC miss vs historical?
     hist_var_1d = historical_var(port)

@@ -1,61 +1,52 @@
-# Multi-Asset Portfolio VaR / ES Dashboard
+# VaR / ES Risk Engine
 
-Daily and 5-day 99% Value-at-Risk and Expected Shortfall on a 15-ticker US equity
-portfolio ($10mm notional), via Historical Simulation and Monte Carlo (normal).
-Stress-tested against 2008 GFC, March 2020 COVID, and 2022 rate hikes. Full
-narrative in `notebooks/analysis.ipynb`.
+99% Value-at-Risk and Expected Shortfall computed three ways (Historical Simulation, Parametric variance-covariance, and Monte Carlo) on a 15-name $10mm US equity portfolio over 4,877 trading days (2007–present), with rolling backtests, historical stress scenarios, and sector-level component ES attribution. Methodology aligned with Basel III FRTB Internal Models Approach.
 
-Why I built this: a practical comparison of the VaR vs ES distinction behind the
-Basel III FRTB 2016 shift to stressed Expected Shortfall. The same fat-tail
-mechanism shows up in counterparty credit risk, which I cover in a separate
-Caterpillar (CAT) credit research project.
+## Findings
 
-## Headline numbers
+1. **Fat-tail signature at 1-day**. Historical ES 5.70% vs Monte Carlo normal ES 3.71% at 99%; Hist/MC ratio of 1.54x, the magnitude normal-fit misses. Excess kurtosis of daily returns ≈ 12.7.
 
-|                       | 1-day VaR | 1-day ES | 5-day VaR | 5-day ES |
-|-----------------------|-----------|----------|-----------|----------|
-| Historical            | 3.89%     | 5.70%    | 8.06%     | 11.33%   |
-| Monte Carlo (normal)  | 3.23%     | 3.71%    | 6.82%     | 7.70%    |
-| Hist / MC ratio       | 1.21x     | 1.54x    | 1.18x     | 1.47x    |
+2. **Gap collapses over horizon**. 10-day Hist/MC ES ratio = 1.39x (15.12% / 10.90%), down from 1.54x at 1-day. Consistent with CLT damping fat-tail effect as horizon grows. Empirical motivation for FRTB requiring stressed-window calibration rather than horizon-scaling the full-sample VaR.
 
-In dollars on $10mm notional, 1-day 99% ES: Historical $570k vs MC normal $371k.
-The 53% gap on ES is the empirical evidence behind the FRTB shift from VaR to
-stressed ES. Normal-fit MC systematically misses tail mass that Historical
-Simulation captures by construction.
+3. **All three methods reject conditional coverage**. Rolling 252-day backtest over 4,625 windows. Parametric and MC fail Kupiec POF hard (LR 88 / 71 vs 3.84 critical) from fat-tail underestimation. Historical's POF failure is milder (LR 19) but still rejects, and also fails Christoffersen independence (LR 9.3) on exceedance clustering — vol regimes drive correlated breaches. LR_CC ranges 28–98, all reject at 95%.
 
-## Crisis stress tests
+4. **Crisis stress = 1.3–2.5x model VaR**. Worst 5-day returns: GFC 2008 = −20.2% (2.5x), March 2020 COVID = −18.1% (2.2x), 2022 rate cycle = −10.3% (1.3x). Five-day 99% historical VaR = 8.06%.
 
-Worst observed 5-day losses vs the model 5-day 99% VaR (8.06%):
+5. **Tail risk concentrated in Financials, not Tech**. Component ES decomposition by sector. Financials 20% capital → 30.1% tail risk share (+10.1pp over-contribution), reflecting GFC-era stress on JPM/BAC/GS. Information Technology, despite 33% capital, near-parity at 30.0% on risk: mega-cap franchises (AAPL/MSFT/NVDA) dampen left tails relative to banks. Health Care 20% capital → 14.5% risk (−5.5pp), defensive as expected.
 
-- 2008 GFC: -20.18% = 2.50x model VaR
-- March 2020 COVID: -18.14% = 2.25x model VaR
-- 2022 rate hikes: -10.34% = 1.28x model VaR
-
-Even ES at 99% (11.33%) is breached in all three windows. The model holds in calm
-regimes and breaks in crisis ones. Stressed ES under FRTB is the regulatory
-response, though it still calibrates to a known crisis, not the next one.
-
-## Setup
+## Run
 
 ```bash
-git clone git@github.com:t-x-hu/var-dashboard.git
-cd var-dashboard
-conda create -n var-dashboard python=3.12
-conda activate var-dashboard
 pip install -r requirements.txt
-jupyter notebook notebooks/analysis.ipynb
+python src/var.py           # Historical VaR + ES, 1d / 5d / 10d
+python src/parametric.py    # Closed-form variance-covariance, cross-checked vs MC
+python src/monte_carlo.py   # MC normal VaR + ES, gap vs Historical
+python src/stress.py        # GFC / COVID / 2022 crisis windows
+python src/backtest.py      # Kupiec POF + Christoffersen + CC, three methods
+python src/attribution.py   # Component ES by sector (Euler decomposition)
 ```
 
-## Project structure
+## Project Structure
 
 ```
 src/
-  portfolio.py     positions, weights, $10mm notional
-  returns.py       Yahoo Finance fetcher, daily and rolling returns
-  var.py           Historical Simulation VaR/ES, rolling windows
-  monte_carlo.py   Normal MC VaR/ES, configurable horizon
-  stress.py        Crisis windows + per-window worst-loss / drawdown stats
-  storage.py       SQLite persistence (positions, returns, risk run audit log)
-notebooks/
-  analysis.ipynb   Full narrative: portfolio, returns, VaR/ES, stress, conclusion
+  portfolio.py     15-name US equity portfolio, 6 GICS sectors, $10mm notional
+  returns.py       yfinance daily price fetch + return calculation
+  var.py           Historical Simulation VaR + ES
+  parametric.py    Parametric VaR + ES (normal closed-form)
+  monte_carlo.py   Monte Carlo normal VaR + ES (10k sims, fixed seed)
+  stress.py        Three historical crisis windows
+  backtest.py      Kupiec POF + Christoffersen independence + CC
+  attribution.py   Component ES by sector (Euler decomposition)
+  storage.py       SQLite persistence: positions, returns, risk_runs
+```
 
+## Limitations
+
+1. **No conditional vol modeling**. All three methods assume IID returns; the Christoffersen test confirms IID fails empirically. GARCH(1,1) filtering (VaR on filtered innovations) is the next step.
+
+2. **Normal-fit MC adds nothing over Parametric**. Same distribution + fixed seed → essentially identical VaR/ES (modulo sampling noise). MC's actual value (heavy tails, jumps, multi-asset correlation) is untapped here. Extension to t-distribution MC or empirical bootstrap would actually exercise MC's flexibility.
+
+3. **Backtest uses rolling 252-day window**. FRTB IMA actually requires calibration on a fixed stressed window (e.g., 2008–2009). Current implementation tracks current-regime VaR, not stressed-period VaR.
+
+4. **Single asset class**. US equity only. Multi-asset extension would require correlation matrix modeling and Cholesky factorization for MC.

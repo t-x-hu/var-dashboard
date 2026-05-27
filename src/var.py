@@ -49,6 +49,10 @@ if __name__ == "__main__":
     var_5d = historical_var(port_5d)
     es_5d = historical_es(port_5d)
     print(f"  5-day  VaR  {var_5d:>6.2%}   ES  {es_5d:>6.2%}")
+    port_10d = rolling_returns(port, 10).dropna()
+    var_10d = historical_var(port_10d)
+    es_10d = historical_es(port_10d)
+    print(f"  10-day VaR  {var_10d:>6.2%}   ES  {es_10d:>6.2%}")
 
     # how much extra does ES capture vs VaR?
     print(f"\n  ES/VaR ratio (1d): {es_1d/var_1d:.2f}x")
